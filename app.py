@@ -1,52 +1,38 @@
 from flask import Flask, request, jsonify
-import subprocess
-import os
-import uuid
+from playwright.sync_api import sync_playwright
+import re
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return '✅ Instagram Video Downloader API is running!'
-
-@app.route('/api/download', methods=['POST'])
-def download_instagram_video():
-    data = request.json
+@app.route('/download', methods=['POST'])
+def download():
+    data = request.get_json()
     url = data.get("url")
 
-    if not url or "instagram.com" not in url:
-        return jsonify({"success": False, "message": "Invalid Instagram URL"}), 400
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
 
     try:
-        # Generate a random filename
-        filename = f"{uuid.uuid4().hex}.mp4"
-        output_path = f"downloads/{filename}"
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
+            page.goto(url, timeout=60000)
 
-        # Create downloads folder if not exist
-        os.makedirs("downloads", exist_ok=True)
+            # Wait for video to load
+            page.wait_for_selector('video', timeout=10000)
+            video_element = page.query_selector("video")
+            video_url = video_element.get_attribute("src")
 
-        # Use yt-dlp to download Instagram video
-        command = [
-            "yt-dlp",
-            "-f", "mp4",
-            "-o", output_path,
-            url
-        ]
-        subprocess.run(command, check=True)
+            browser.close()
 
-        # Return download URL
-        download_url = request.host_url + "downloads/" + filename
-        return jsonify({"success": True, "download_url": download_url})
+            if video_url and video_url.startswith("http"):
+                return jsonify({"video_url": video_url})
+            else:
+                return jsonify({"error": "Video not found"}), 404
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
-
-# Serve downloaded files
-from flask import send_from_directory
-
-@app.route('/downloads/<filename>')
-def serve_video(filename):
-    return send_from_directory("downloads", filename)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    app.run(debug=True)
