@@ -33,3 +33,9 @@ def download():
             return jsonify({"video_url": download_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ✅ This is the only addition required for Render to bind the port:
+if __name__ == "__main__":
+    from waitress import serve
+    import os
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
