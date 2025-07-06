@@ -3,34 +3,33 @@ from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
-@app.route("/", methods=["GET"])
+@app.route('/')
 def home():
-    return "Instagram Downloader API is Live!"
+    return "✅ API is Live"
 
-@app.route("/download", methods=["POST"])
+@app.route('/download', methods=['POST'])
 def download():
     data = request.get_json()
     url = data.get("url")
 
     if not url:
-        return jsonify({"error": "Missing Instagram URL"}), 400
+        return jsonify({"error": "No URL provided"}), 400
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url)
-
-            page.wait_for_timeout(3000)
-
-            video = page.query_selector("video")
-            if not video:
-                return jsonify({"error": "No video found"}), 404
-
-            video_url = video.get_attribute("src")
+            page.goto("https://ssstik.io/en")
+            page.fill('input[name="id"]', url)
+            page.click('button[type="submit"]')
+            page.wait_for_selector("a.download_link", timeout=15000)
+            link = page.query_selector("a.download_link")
+            download_url = link.get_attribute("href") if link else None
             browser.close()
 
-            return jsonify({"video_url": video_url})
+            if not download_url:
+                return jsonify({"error": "No video found."}), 404
 
+            return jsonify({"video_url": download_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
